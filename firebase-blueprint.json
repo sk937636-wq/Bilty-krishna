@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "biltyRecord": {
+      "title": "Bilty Record",
+      "description": "Transport Lorry Receipt (Bilty) document record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 16 },
+        "lrNo": { "type": "string", "maxLength": 64 },
+        "date": { "type": "string", "maxLength": 32 },
+        "fromCity": { "type": "string", "maxLength": 128 },
+        "toCity": { "type": "string", "maxLength": 128 },
+        "vehicleSize": { "type": "string", "maxLength": 64 },
+        "vehicleNo": { "type": "string", "maxLength": 64 },
+        "consignorName": { "type": "string", "maxLength": 256 },
+        "consignorGst": { "type": "string", "maxLength": 64 },
+        "consignorAddress": { "type": "string", "maxLength": 512 },
+        "consigneeName": { "type": "string", "maxLength": 256 },
+        "consigneeGst": { "type": "string", "maxLength": 64 },
+        "consigneeAddress": { "type": "string", "maxLength": 512 },
+        "goodsDescription": { "type": "string", "maxLength": 512 },
+        "quantity": { "type": "string", "maxLength": 128 },
+        "sealNumber": { "type": "string", "maxLength": 64 },
+        "netWeight": { "type": "string", "maxLength": 64 },
+        "invoiceNo": { "type": "string", "maxLength": 128 },
+        "invoiceValue": { "type": "string", "maxLength": 128 },
+        "eWayBillNo": { "type": "string", "maxLength": 128 },
+        "inDate": { "type": "string", "maxLength": 32 },
+        "freight": { "type": "number" },
+        "otherCharges": { "type": "number" },
+        "total": { "type": "number" },
+        "gstType": { "type": "string", "maxLength": 32 },
+        "gstRate": { "type": "number" },
+        "sgstAmount": { "type": "number" },
+        "cgstAmount": { "type": "number" },
+        "igstAmount": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "advance": { "type": "number" },
+        "balance": { "type": "number" },
+        "paymentMode": { "type": "string", "maxLength": 64 },
+        "remarks": { "type": "string", "maxLength": 512 },
+        "partyName": { "type": "string", "maxLength": 256 },
+        "isShared": { "type": "boolean" },
+        "sharedAt": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "lrNo", "date", "fromCity", "toCity", "vehicleNo"]
+    },
+    "companyProfile": {
+      "title": "Company Profile",
+      "description": "Transport business company settings and header information",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string", "maxLength": 256 },
+        "tagline": { "type": "string", "maxLength": 256 },
+        "routes": { "type": "string", "maxLength": 512 },
+        "address": { "type": "string", "maxLength": 512 },
+        "email": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "gstin": { "type": "string", "maxLength": 64 },
+        "jurisdiction": { "type": "string", "maxLength": 256 },
+        "bankName": { "type": "string", "maxLength": 128 },
+        "bankAccountNo": { "type": "string", "maxLength": 64 },
+        "bankIfsc": { "type": "string", "maxLength": 64 },
+        "logoMonogram": { "type": "string", "maxLength": 32 },
+        "disclaimer1": { "type": "string", "maxLength": 512 },
+        "disclaimer2": { "type": "string", "maxLength": 512 },
+        "disclaimer3": { "type": "string", "maxLength": 512 },
+        "signText": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["companyName", "phone"]
+    }
+  },
+  "firestore": {
+    "/krl/{biltyId}": {
+      "schema": "biltyRecord",
+      "description": "Collection of Krishna Roadlines (KRL) bilty/LR receipts"
+    },
+    "/ktc/{biltyId}": {
+      "schema": "biltyRecord",
+      "description": "Collection of Krishna Transport Company (KTC) bilty/LR receipts"
+    },
+    "/bilties/{biltyId}": {
+      "schema": "biltyRecord",
+      "description": "Legacy collection of all transport bilty/LR receipts"
+    },
+    "/settings/company_profile": {
+      "schema": "companyProfile",
+      "description": "Company profile details and invoice preferences"
+    }
+  }
+}

@@ -1,0 +1,208 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Primitives & Helpers
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // Verified owner email OR exact company operator UID (zero DB lookups — safe for allow list)
+    function isAuthorizedOperator() {
+      return isSignedIn() && (
+        request.auth.uid == 'eNDb9XEdfbV6yINWTwfZPEK0gbY2' ||
+        (request.auth.token.email == 'sk937636@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    // Admin check for single-document operations
+    function isAdmin() {
+      return isAuthorizedOperator() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptionalNumber(data, key) {
+      return !(key in data) || (data[key] is number);
+    }
+
+    function isOptionalBool(data, key) {
+      return !(key in data) || (data[key] is bool);
+    }
+
+    // 3. Validation Blueprints
+    function isValidBilty(data) {
+      return data.keys().hasAll(['id', 'lrNo', 'date', 'fromCity', 'toCity', 'vehicleNo']) &&
+        data.keys().hasOnly([
+          'id', 'companyId', 'lrNo', 'date', 'fromCity', 'toCity',
+          'vehicleSize', 'vehicleNo', 'consignorName', 'consignorGst', 'consignorAddress',
+          'consigneeName', 'consigneeGst', 'consigneeAddress', 'goodsDescription',
+          'quantity', 'sealNumber', 'netWeight', 'invoiceNo', 'invoiceValue',
+          'eWayBillNo', 'inDate', 'freight', 'otherCharges', 'total',
+          'gstType', 'gstRate', 'sgstAmount', 'cgstAmount', 'igstAmount',
+          'grandTotal', 'advance', 'balance', 'paymentMode', 'remarks',
+          'partyName', 'isShared', 'sharedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isOptionalString(data, 'companyId', 16) &&
+        data.lrNo is string && data.lrNo.size() <= 64 &&
+        data.date is string && data.date.size() <= 32 &&
+        data.fromCity is string && data.fromCity.size() <= 128 &&
+        data.toCity is string && data.toCity.size() <= 128 &&
+        isOptionalString(data, 'vehicleSize', 64) &&
+        data.vehicleNo is string && data.vehicleNo.size() <= 64 &&
+        isOptionalString(data, 'consignorName', 256) &&
+        isOptionalString(data, 'consignorGst', 64) &&
+        isOptionalString(data, 'consignorAddress', 512) &&
+        isOptionalString(data, 'consigneeName', 256) &&
+        isOptionalString(data, 'consigneeGst', 64) &&
+        isOptionalString(data, 'consigneeAddress', 512) &&
+        isOptionalString(data, 'goodsDescription', 512) &&
+        isOptionalString(data, 'quantity', 128) &&
+        isOptionalString(data, 'sealNumber', 64) &&
+        isOptionalString(data, 'netWeight', 64) &&
+        isOptionalString(data, 'invoiceNo', 128) &&
+        isOptionalString(data, 'invoiceValue', 128) &&
+        isOptionalString(data, 'eWayBillNo', 128) &&
+        isOptionalString(data, 'inDate', 32) &&
+        isOptionalNumber(data, 'freight') &&
+        isOptionalNumber(data, 'otherCharges') &&
+        isOptionalNumber(data, 'total') &&
+        isOptionalString(data, 'gstType', 32) &&
+        isOptionalNumber(data, 'gstRate') &&
+        isOptionalNumber(data, 'sgstAmount') &&
+        isOptionalNumber(data, 'cgstAmount') &&
+        isOptionalNumber(data, 'igstAmount') &&
+        isOptionalNumber(data, 'grandTotal') &&
+        isOptionalNumber(data, 'advance') &&
+        isOptionalNumber(data, 'balance') &&
+        isOptionalString(data, 'paymentMode', 64) &&
+        isOptionalString(data, 'remarks', 512) &&
+        isOptionalString(data, 'partyName', 256) &&
+        isOptionalBool(data, 'isShared') &&
+        isOptionalNumber(data, 'sharedAt') &&
+        isOptionalNumber(data, 'createdAt') &&
+        isOptionalNumber(data, 'updatedAt');
+    }
+
+    function isValidBiltyUpdate(data) {
+      return isValidBilty(data) &&
+        data.id == existing().id &&
+        (!('createdAt' in existing()) || !('createdAt' in data) || data.createdAt == existing().createdAt) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'companyId', 'lrNo', 'date', 'fromCity', 'toCity',
+          'vehicleSize', 'vehicleNo', 'consignorName', 'consignorGst', 'consignorAddress',
+          'consigneeName', 'consigneeGst', 'consigneeAddress', 'goodsDescription',
+          'quantity', 'sealNumber', 'netWeight', 'invoiceNo', 'invoiceValue',
+          'eWayBillNo', 'inDate', 'freight', 'otherCharges', 'total',
+          'gstType', 'gstRate', 'sgstAmount', 'cgstAmount', 'igstAmount',
+          'grandTotal', 'advance', 'balance', 'paymentMode', 'remarks',
+          'partyName', 'isShared', 'sharedAt', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function isValidCompanyProfile(data) {
+      return data.keys().hasAll(['companyName', 'phone']) &&
+        data.keys().hasOnly([
+          'companyName', 'tagline', 'routes', 'address', 'email', 'phone',
+          'gstin', 'jurisdiction', 'bankName', 'bankAccountNo', 'bankIfsc',
+          'logoMonogram', 'disclaimer1', 'disclaimer2', 'disclaimer3', 'signText'
+        ]) &&
+        data.companyName is string && data.companyName.size() <= 256 &&
+        isOptionalString(data, 'tagline', 256) &&
+        isOptionalString(data, 'routes', 512) &&
+        isOptionalString(data, 'address', 512) &&
+        isOptionalString(data, 'email', 128) &&
+        data.phone is string && data.phone.size() <= 64 &&
+        isOptionalString(data, 'gstin', 64) &&
+        isOptionalString(data, 'jurisdiction', 256) &&
+        isOptionalString(data, 'bankName', 128) &&
+        isOptionalString(data, 'bankAccountNo', 64) &&
+        isOptionalString(data, 'bankIfsc', 64) &&
+        isOptionalString(data, 'logoMonogram', 32) &&
+        isOptionalString(data, 'disclaimer1', 512) &&
+        isOptionalString(data, 'disclaimer2', 512) &&
+        isOptionalString(data, 'disclaimer3', 512) &&
+        isOptionalString(data, 'signText', 128);
+    }
+
+    // 4. Krishna Roadlines (KRL) Collection
+    match /krl/{biltyId} {
+      allow get: if isSignedIn() && isValidId(biltyId) && isAdmin();
+      allow list: if isAuthorizedOperator();
+      allow create: if isSignedIn() && isValidId(biltyId) && isValidBilty(incoming()) && incoming().id == biltyId && isAdmin();
+      allow update: if isSignedIn() && isValidId(biltyId) && isValidBiltyUpdate(incoming()) && isAdmin();
+      allow delete: if isSignedIn() && isValidId(biltyId) && isAdmin();
+    }
+
+    // 5. Krishna Transport Company (KTC) Collection
+    match /ktc/{biltyId} {
+      allow get: if isSignedIn() && isValidId(biltyId) && isAdmin();
+      allow list: if isAuthorizedOperator();
+      allow create: if isSignedIn() && isValidId(biltyId) && isValidBilty(incoming()) && incoming().id == biltyId && isAdmin();
+      allow update: if isSignedIn() && isValidId(biltyId) && isValidBiltyUpdate(incoming()) && isAdmin();
+      allow delete: if isSignedIn() && isValidId(biltyId) && isAdmin();
+    }
+
+    // 6. Legacy Bilties Migration Collection
+    match /bilties/{biltyId} {
+      allow get: if isSignedIn() && isValidId(biltyId) && isAdmin();
+      allow list: if isAuthorizedOperator();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(biltyId) && isAdmin();
+    }
+
+    // 7. Company Settings Document
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && settingId == 'company_profile' && isAdmin();
+      allow list: if false;
+      allow create: if isSignedIn() && settingId == 'company_profile' && isValidCompanyProfile(incoming()) && isAdmin();
+      allow update: if isSignedIn() && settingId == 'company_profile' && isValidCompanyProfile(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'companyName', 'tagline', 'routes', 'address', 'email', 'phone',
+          'gstin', 'jurisdiction', 'bankName', 'bankAccountNo', 'bankIfsc',
+          'logoMonogram', 'disclaimer1', 'disclaimer2', 'disclaimer3', 'signText'
+        ]) && isAdmin();
+      allow delete: if false;
+    }
+
+    // 8. Admin Registry (Read self only; console-managed)
+    match /admins/{adminId} {
+      allow get: if isVerifiedUser() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    // 9. Connection Check Document
+    match /test/{docId} {
+      allow get: if isSignedIn() && docId == 'connection' && isAuthorizedOperator();
+      allow list, create, update, delete: if false;
+    }
+  }
+}

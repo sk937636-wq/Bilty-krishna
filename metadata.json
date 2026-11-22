@@ -1,0 +1,6 @@
+{
+  "name": "Transport Bilty & LR Generator",
+  "description": "Create, format, and manage transport lorry receipts (bilty) with auto-incrementing LR numbers and effortless PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
