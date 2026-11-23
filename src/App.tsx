@@ -762,7 +762,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Right Side: 1. Share, 2. Edit, 3. Delete Action Buttons (White Box, Light Colored Icons) */}
+                      {/* Right Side: 1. Share, 2. Edit, 3. Delete Action Buttons (Clean Borderless, Light Colored Icons) */}
                       <div className="shrink-0 flex items-center gap-[3px]">
                         {/* 1. Share Action Button */}
                         <button
@@ -771,9 +771,7 @@ export default function App() {
                           onClick={() => setShareModalRecord(rec)}
                           aria-label="Share Bilty"
                           title="SHARE"
-                          className={`w-11 sm:w-14 h-16 rounded-lg border bg-white hover:bg-slate-50 ${
-                            isKtc ? 'border-red-900' : 'border-blue-900'
-                          } text-green-500 disabled:opacity-60 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs`}
+                          className="w-11 sm:w-14 h-16 rounded-lg bg-white hover:bg-slate-50 text-green-500 disabled:opacity-60 active:scale-95 flex items-center justify-center transition-all cursor-pointer"
                         >
                           {isCurrentSharing ? (
                             <Loader2 className="w-5 h-5 animate-spin stroke-[2.75]" />
@@ -791,9 +789,7 @@ export default function App() {
                           }}
                           aria-label="Edit Bilty"
                           title="EDIT"
-                          className={`w-11 sm:w-14 h-16 rounded-lg border bg-white hover:bg-slate-50 ${
-                            isKtc ? 'border-red-900' : 'border-blue-900'
-                          } text-amber-400 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs`}
+                          className="w-11 sm:w-14 h-16 rounded-lg bg-white hover:bg-slate-50 text-amber-400 active:scale-95 flex items-center justify-center transition-all cursor-pointer"
                         >
                           <Pencil className="w-5 h-5 stroke-[2.75]" />
                         </button>
@@ -804,9 +800,7 @@ export default function App() {
                           onClick={() => setDeletingRecord(rec)}
                           aria-label="Delete Bilty"
                           title="DELETE"
-                          className={`w-11 sm:w-14 h-16 rounded-lg border bg-white hover:bg-slate-50 ${
-                            isKtc ? 'border-red-900' : 'border-blue-900'
-                          } text-red-400 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs`}
+                          className="w-11 sm:w-14 h-16 rounded-lg bg-white hover:bg-slate-50 text-red-400 active:scale-95 flex items-center justify-center transition-all cursor-pointer"
                         >
                           <Trash2 className="w-5 h-5 stroke-[2.75]" />
                         </button>
