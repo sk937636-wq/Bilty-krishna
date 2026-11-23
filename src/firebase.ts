@@ -184,7 +184,10 @@ export function sanitizeBilty(bilty: BiltyRecord): Record<string, unknown> {
     partyName: String(bilty.partyName || '').slice(0, 256),
     isShared: Boolean(bilty.isShared),
     sharedAt: Number(bilty.sharedAt) || 0,
-    createdAt: Number(bilty.createdAt) || Date.now(),
+    createdAt:
+      typeof bilty.createdAt === 'number' && !Number.isNaN(bilty.createdAt)
+        ? bilty.createdAt
+        : Date.now(),
     updatedAt: Number(bilty.updatedAt) || Date.now(),
   };
 }

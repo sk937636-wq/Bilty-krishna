@@ -41,14 +41,29 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
 }) => {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
-  const closedByPopStateRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  const hasPushedHistoryRef = useRef(false);
   const [fitScale, setFitScale] = useState(0.32);
   const [tableNaturalHeight, setTableNaturalHeight] = useState(710);
+
+  onCloseRef.current = onClose;
+
+  const isOpen = Boolean(record);
 
   const sheetHeightPx = Math.max(
     A4_SHEET_MIN_HEIGHT_PX,
     PAGE_MARGIN_TOP_PX + tableNaturalHeight + PAGE_MARGIN_BOTTOM_MIN_PX
   );
+
+  const handleUserClose = () => {
+    const shouldPop =
+      hasPushedHistoryRef.current && Boolean(window.history.state?.biltyFullPreview);
+    hasPushedHistoryRef.current = false;
+    onCloseRef.current();
+    if (shouldPop) {
+      window.history.back();
+    }
+  };
 
   // Sync document title for clean browser print / save filename
   useEffect(() => {
@@ -64,20 +79,25 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
     };
   }, [record]);
 
-  // Support Android/Browser Back button and Escape key to close cleanly
+  // Support Android/Browser Back button and Escape key to close cleanly without auto-closing on re-renders
   useEffect(() => {
-    if (!record) return;
-    closedByPopStateRef.current = false;
-    window.history.pushState({ biltyFullPreview: true }, '');
+    if (!isOpen) return;
+
+    if (!window.history.state?.biltyFullPreview) {
+      window.history.pushState({ biltyFullPreview: true }, '');
+    }
+    hasPushedHistoryRef.current = true;
 
     const handlePopState = () => {
-      closedByPopStateRef.current = true;
-      onClose();
+      if (hasPushedHistoryRef.current) {
+        hasPushedHistoryRef.current = false;
+        onCloseRef.current();
+      }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        handleUserClose();
       }
     };
 
@@ -86,11 +106,8 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('keydown', handleKeyDown);
-      if (!closedByPopStateRef.current && window.history.state?.biltyFullPreview) {
-        window.history.back();
-      }
     };
-  }, [record, onClose]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!record) return;
@@ -146,7 +163,7 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
       ref={viewportRef}
       style={{ fontFamily: "'Calibri', sans-serif" }}
       className="fixed inset-0 z-50 w-screen h-screen overflow-auto bg-white flex"
-      onClick={onClose}
+      onClick={handleUserClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}

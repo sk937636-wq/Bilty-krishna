@@ -64,9 +64,10 @@ service cloud.firestore {
           'vehicleSize', 'vehicleNo', 'consignorName', 'consignorGst', 'consignorAddress',
           'consigneeName', 'consigneeGst', 'consigneeAddress', 'goodsDescription',
           'quantity', 'sealNumber', 'netWeight', 'invoiceNo', 'invoiceValue',
-          'eWayBillNo', 'inDate', 'freight', 'otherCharges', 'total',
+          'eWayBillNo', 'inDate', 'freight', 'otherCharges', 'otherChargesLabel', 'total',
           'gstType', 'gstRate', 'sgstAmount', 'cgstAmount', 'igstAmount',
-          'grandTotal', 'advance', 'balance', 'paymentMode', 'remarks',
+          'grandTotal', 'advance', 'balance', 'paymentMode', 'driverName', 'driverPhone',
+          'packages', 'packingType', 'remarks',
           'partyName', 'isShared', 'sharedAt', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -93,6 +94,7 @@ service cloud.firestore {
         isOptionalString(data, 'inDate', 32) &&
         isOptionalNumber(data, 'freight') &&
         isOptionalNumber(data, 'otherCharges') &&
+        isOptionalString(data, 'otherChargesLabel', 128) &&
         isOptionalNumber(data, 'total') &&
         isOptionalString(data, 'gstType', 32) &&
         isOptionalNumber(data, 'gstRate') &&
@@ -103,28 +105,16 @@ service cloud.firestore {
         isOptionalNumber(data, 'advance') &&
         isOptionalNumber(data, 'balance') &&
         isOptionalString(data, 'paymentMode', 64) &&
+        isOptionalString(data, 'driverName', 128) &&
+        isOptionalString(data, 'driverPhone', 64) &&
+        isOptionalString(data, 'packages', 128) &&
+        isOptionalString(data, 'packingType', 128) &&
         isOptionalString(data, 'remarks', 512) &&
         isOptionalString(data, 'partyName', 256) &&
         isOptionalBool(data, 'isShared') &&
         isOptionalNumber(data, 'sharedAt') &&
         isOptionalNumber(data, 'createdAt') &&
         isOptionalNumber(data, 'updatedAt');
-    }
-
-    function isValidBiltyUpdate(data) {
-      return isValidBilty(data) &&
-        data.id == existing().id &&
-        (!('createdAt' in existing()) || !('createdAt' in data) || data.createdAt == existing().createdAt) &&
-        incoming().diff(existing()).affectedKeys().hasOnly([
-          'companyId', 'lrNo', 'date', 'fromCity', 'toCity',
-          'vehicleSize', 'vehicleNo', 'consignorName', 'consignorGst', 'consignorAddress',
-          'consigneeName', 'consigneeGst', 'consigneeAddress', 'goodsDescription',
-          'quantity', 'sealNumber', 'netWeight', 'invoiceNo', 'invoiceValue',
-          'eWayBillNo', 'inDate', 'freight', 'otherCharges', 'total',
-          'gstType', 'gstRate', 'sgstAmount', 'cgstAmount', 'igstAmount',
-          'grandTotal', 'advance', 'balance', 'paymentMode', 'remarks',
-          'partyName', 'isShared', 'sharedAt', 'createdAt', 'updatedAt'
-        ]);
     }
 
     function isValidCompanyProfile(data) {
@@ -157,7 +147,9 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(biltyId) && isAdmin();
       allow list: if isAuthorizedOperator();
       allow create: if isSignedIn() && isValidId(biltyId) && isValidBilty(incoming()) && incoming().id == biltyId && isAdmin();
-      allow update: if isSignedIn() && isValidId(biltyId) && isValidBiltyUpdate(incoming()) && isAdmin();
+      allow update: if isSignedIn() && isValidId(biltyId) && isValidBilty(incoming()) && incoming().id == biltyId && (
+        isAdmin()
+      );
       allow delete: if isSignedIn() && isValidId(biltyId) && isAdmin();
     }
 
@@ -166,7 +158,9 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(biltyId) && isAdmin();
       allow list: if isAuthorizedOperator();
       allow create: if isSignedIn() && isValidId(biltyId) && isValidBilty(incoming()) && incoming().id == biltyId && isAdmin();
-      allow update: if isSignedIn() && isValidId(biltyId) && isValidBiltyUpdate(incoming()) && isAdmin();
+      allow update: if isSignedIn() && isValidId(biltyId) && isValidBilty(incoming()) && incoming().id == biltyId && (
+        isAdmin()
+      );
       allow delete: if isSignedIn() && isValidId(biltyId) && isAdmin();
     }
 
@@ -184,12 +178,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && settingId == 'company_profile' && isAdmin();
       allow list: if false;
       allow create: if isSignedIn() && settingId == 'company_profile' && isValidCompanyProfile(incoming()) && isAdmin();
-      allow update: if isSignedIn() && settingId == 'company_profile' && isValidCompanyProfile(incoming()) &&
-        incoming().diff(existing()).affectedKeys().hasOnly([
-          'companyName', 'tagline', 'routes', 'address', 'email', 'phone',
-          'gstin', 'jurisdiction', 'bankName', 'bankAccountNo', 'bankIfsc',
-          'logoMonogram', 'disclaimer1', 'disclaimer2', 'disclaimer3', 'signText'
-        ]) && isAdmin();
+      allow update: if isSignedIn() && settingId == 'company_profile' && isValidCompanyProfile(incoming()) && isAdmin();
       allow delete: if false;
     }
 
