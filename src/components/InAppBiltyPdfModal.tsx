@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { BiltyRecord, CompanyId } from '../types';
 import { DEFAULT_COMPANY_PROFILE, KTC_COMPANY_PROFILE } from '../utils/storage';
 import { BiltyPreview } from './BiltyPreview';
+import { getInDateDay } from './SharePartyModal';
 
 interface InAppBiltyPdfModalProps {
   record: BiltyRecord | null;
@@ -19,20 +20,6 @@ const A4_SHEET_MIN_HEIGHT_PX = Math.round(210 * PX_PER_MM); // 820px
 const PAGE_MARGIN_LEFT_PX = Math.round(23.5 * PX_PER_MM); // 92px (23.50mm)
 const PAGE_MARGIN_TOP_PX = Math.round(11.68 * PX_PER_MM); // 46px (11.68mm)
 const PAGE_MARGIN_BOTTOM_MIN_PX = Math.round(11.68 * PX_PER_MM); // 46px
-
-function getInDateDay(dateStr?: string): string {
-  if (!dateStr) {
-    return String(new Date().getDate()).padStart(2, '0');
-  }
-  const parts = dateStr.split('-');
-  if (parts.length === 3) {
-    if (parts[0].length === 4) {
-      return parts[2].padStart(2, '0');
-    }
-    return parts[0].padStart(2, '0');
-  }
-  return dateStr;
-}
 
 export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
   record,
@@ -55,6 +42,18 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
     PAGE_MARGIN_TOP_PX + tableNaturalHeight + PAGE_MARGIN_BOTTOM_MIN_PX
   );
 
+  const dd = record ? getInDateDay(record.inDate || record.date) : '';
+  const lrPart = record ? (record.lrNo || 'LR').trim().toUpperCase() : '';
+  const partyPart = record
+    ? (record.partyName || record.consigneeName || '').trim().toUpperCase()
+    : '';
+  const baseFileName = record
+    ? partyPart
+      ? `${lrPart} - ${dd} - ${partyPart}`
+      : `${lrPart} - ${dd}`
+    : '';
+  const displayFileName = baseFileName ? `${baseFileName}.pdf` : '';
+
   const handleUserClose = () => {
     const shouldPop =
       hasPushedHistoryRef.current && Boolean(window.history.state?.biltyFullPreview);
@@ -67,17 +66,13 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
 
   // Sync document title for clean browser print / save filename
   useEffect(() => {
-    if (!record) return;
+    if (!record || !baseFileName) return;
     const prevTitle = document.title;
-    const dd = getInDateDay(record.inDate || record.date);
-    const party = (record.partyName || record.consigneeName || '').trim().toUpperCase();
-    document.title = party
-      ? `${record.lrNo} - ${dd} - ${party}`
-      : `${record.lrNo} - ${dd}`;
+    document.title = baseFileName;
     return () => {
       document.title = prevTitle;
     };
-  }, [record]);
+  }, [record, baseFileName]);
 
   // Support Android/Browser Back button and Escape key to close cleanly without auto-closing on re-renders
   useEffect(() => {
@@ -115,8 +110,13 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
     if (!el) return;
 
     const updateFitScale = () => {
-      const availableWidth = Math.max(240, el.clientWidth);
-      const availableHeight = Math.max(200, el.clientHeight);
+      const style = window.getComputedStyle(el);
+      const padX =
+        (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      const padY =
+        (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+      const availableWidth = Math.max(200, el.clientWidth - padX);
+      const availableHeight = Math.max(160, el.clientHeight - padY);
       const calculated = Math.min(
         availableWidth / A4_SHEET_WIDTH_PX,
         availableHeight / sheetHeightPx
@@ -160,38 +160,66 @@ export const InAppBiltyPdfModal: React.FC<InAppBiltyPdfModalProps> = ({
 
   return (
     <div
-      ref={viewportRef}
       style={{ fontFamily: "'Calibri', sans-serif" }}
-      className="fixed inset-0 z-50 w-screen h-screen overflow-auto bg-white flex"
+      className="fixed inset-0 z-50 w-screen h-screen flex flex-col bg-slate-900/20 backdrop-blur-md print:bg-white print:backdrop-blur-none"
       onClick={handleUserClose}
     >
-      <div
+      {/* Dedicated Top Header Bar: Displays only the PDF file name */}
+      <header
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: `${Math.round(A4_SHEET_WIDTH_PX * fitScale)}px`,
-          height: `${Math.round(sheetHeightPx * fitScale)}px`,
-        }}
-        className="relative bg-white shrink-0 m-auto overflow-hidden"
+        className={`no-print shrink-0 h-12 px-4 flex items-center justify-center bg-white/85 backdrop-blur-md border-b shadow-2xs select-text ${
+          isKtc ? 'border-red-900/20' : 'border-blue-900/20'
+        }`}
+      >
+        <span
+          title={displayFileName}
+          style={{
+            fontFamily: "'Calibri', sans-serif",
+            fontWeight: 900,
+            WebkitTextStroke: '0.35px currentColor',
+            transform: 'scaleY(1.15)',
+          }}
+          className={`block max-w-full truncate text-[15px] sm:text-[16px] font-black tracking-wide tabular-nums leading-none ${
+            isKtc ? 'text-red-950' : 'text-slate-950'
+          }`}
+        >
+          {displayFileName}
+        </span>
+      </header>
+
+      {/* Padded Transparent Glass Stage framing the centered white A4 Bilty sheet */}
+      <div
+        ref={viewportRef}
+        className="flex-1 min-h-0 w-full overflow-auto flex p-3 sm:p-5 print:p-0"
       >
         <div
+          onClick={(e) => e.stopPropagation()}
           style={{
-            width: `${A4_SHEET_WIDTH_PX}px`,
-            height: `${sheetHeightPx}px`,
-            paddingTop: `${PAGE_MARGIN_TOP_PX}px`,
-            paddingLeft: `${PAGE_MARGIN_LEFT_PX}px`,
-            transform: `scale(${fitScale})`,
-            transformOrigin: 'top left',
-            boxSizing: 'border-box',
-            backgroundColor: '#ffffff',
+            width: `${Math.round(A4_SHEET_WIDTH_PX * fitScale)}px`,
+            height: `${Math.round(sheetHeightPx * fitScale)}px`,
           }}
+          className="relative bg-white shrink-0 m-auto overflow-hidden rounded-[2px] shadow-2xl ring-1 ring-slate-950/10 print:shadow-none print:ring-0 print:rounded-none"
         >
-          <div ref={previewRef} style={{ width: `${DOC_TABLE_WIDTH_PX}px` }}>
-            <BiltyPreview
-              bilty={record}
-              company={companyProfile}
-              isPrintMode={true}
-              isEditable={false}
-            />
+          <div
+            style={{
+              width: `${A4_SHEET_WIDTH_PX}px`,
+              height: `${sheetHeightPx}px`,
+              paddingTop: `${PAGE_MARGIN_TOP_PX}px`,
+              paddingLeft: `${PAGE_MARGIN_LEFT_PX}px`,
+              transform: `scale(${fitScale})`,
+              transformOrigin: 'top left',
+              boxSizing: 'border-box',
+              backgroundColor: '#ffffff',
+            }}
+          >
+            <div ref={previewRef} style={{ width: `${DOC_TABLE_WIDTH_PX}px` }}>
+              <BiltyPreview
+                bilty={record}
+                company={companyProfile}
+                isPrintMode={true}
+                isEditable={false}
+              />
+            </div>
           </div>
         </div>
       </div>
