@@ -142,9 +142,17 @@ export function subscribeToAuthState(callback: (user: User | null) => void): () 
 }
 
 // Sanitize bilty record to ensure strict Firestore matching
+function safeNum(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export function sanitizeBilty(bilty: BiltyRecord): Record<string, unknown> {
-  // Ensure valid ID without special illegal characters
-  const safeId = (bilty.id || `bilty-${Date.now()}`).replace(/[^a-zA-Z0-9_\-]/g, '_');
+  // Ensure valid ID without special illegal characters and within 128 chars
+  const safeId = (bilty.id || `bilty-${Date.now()}`)
+    .replace(/[^a-zA-Z0-9_\-]/g, '_')
+    .slice(0, 128);
+  const now = Date.now();
   return {
     id: safeId,
     companyId: bilty.companyId === 'KTC' ? 'KTC' : 'KRL',
@@ -168,27 +176,24 @@ export function sanitizeBilty(bilty: BiltyRecord): Record<string, unknown> {
     invoiceValue: String(bilty.invoiceValue || '').slice(0, 128),
     eWayBillNo: String(bilty.eWayBillNo || '').slice(0, 128),
     inDate: String(bilty.inDate || '').slice(0, 32),
-    freight: Number(bilty.freight) || 0,
-    otherCharges: Number(bilty.otherCharges) || 0,
-    total: Number(bilty.total) || 0,
+    freight: safeNum(bilty.freight, 0),
+    otherCharges: safeNum(bilty.otherCharges, 0),
+    total: safeNum(bilty.total, 0),
     gstType: String(bilty.gstType || 'IGST').slice(0, 32),
-    gstRate: Number(bilty.gstRate) || 0,
-    sgstAmount: Number(bilty.sgstAmount) || 0,
-    cgstAmount: Number(bilty.cgstAmount) || 0,
-    igstAmount: Number(bilty.igstAmount) || 0,
-    grandTotal: Number(bilty.grandTotal) || 0,
-    advance: Number(bilty.advance) || 0,
-    balance: Number(bilty.balance) || 0,
+    gstRate: safeNum(bilty.gstRate, 0),
+    sgstAmount: safeNum(bilty.sgstAmount, 0),
+    cgstAmount: safeNum(bilty.cgstAmount, 0),
+    igstAmount: safeNum(bilty.igstAmount, 0),
+    grandTotal: safeNum(bilty.grandTotal, 0),
+    advance: safeNum(bilty.advance, 0),
+    balance: safeNum(bilty.balance, 0),
     paymentMode: String(bilty.paymentMode || 'TO_BE_BILLED').slice(0, 64),
     remarks: String(bilty.remarks || '').slice(0, 512),
     partyName: String(bilty.partyName || '').slice(0, 256),
     isShared: Boolean(bilty.isShared),
-    sharedAt: Number(bilty.sharedAt) || 0,
-    createdAt:
-      typeof bilty.createdAt === 'number' && !Number.isNaN(bilty.createdAt)
-        ? bilty.createdAt
-        : Date.now(),
-    updatedAt: Number(bilty.updatedAt) || Date.now(),
+    sharedAt: safeNum(bilty.sharedAt, 0),
+    createdAt: safeNum(bilty.createdAt, now),
+    updatedAt: safeNum(bilty.updatedAt, now),
   };
 }
 

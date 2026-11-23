@@ -28,11 +28,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email_verified == true;
     }
 
-    // Verified owner email OR exact company operator UID (zero DB lookups — safe for allow list)
+    // Verified owner/operator emails OR exact company operator UID (zero DB lookups — safe for allow list)
     function isAuthorizedOperator() {
       return isSignedIn() && (
         request.auth.uid == 'eNDb9XEdfbV6yINWTwfZPEK0gbY2' ||
-        (request.auth.token.email == 'sk937636@gmail.com' && request.auth.token.email_verified == true)
+        (request.auth.token.email == 'sk937636@gmail.com' && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == 'krishnaroadlines38@gmail.com' && request.auth.token.email_verified == true)
       );
     }
 
@@ -48,15 +49,7 @@ service cloud.firestore {
       return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
     }
 
-    function isOptionalNumber(data, key) {
-      return !(key in data) || (data[key] is number);
-    }
-
-    function isOptionalBool(data, key) {
-      return !(key in data) || (data[key] is bool);
-    }
-
-    // 3. Validation Blueprints
+    // 3. Validation Blueprints (Lean CEL expression budget well under Firestore 1,000-expression limit)
     function isValidBilty(data) {
       return data.keys().hasAll(['id', 'lrNo', 'date', 'fromCity', 'toCity', 'vehicleNo']) &&
         data.keys().hasOnly([
@@ -71,50 +64,50 @@ service cloud.firestore {
           'partyName', 'isShared', 'sharedAt', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
-        isOptionalString(data, 'companyId', 16) &&
+        data.companyId is string && data.companyId.size() <= 16 &&
         data.lrNo is string && data.lrNo.size() <= 64 &&
         data.date is string && data.date.size() <= 32 &&
         data.fromCity is string && data.fromCity.size() <= 128 &&
         data.toCity is string && data.toCity.size() <= 128 &&
-        isOptionalString(data, 'vehicleSize', 64) &&
+        data.vehicleSize is string && data.vehicleSize.size() <= 64 &&
         data.vehicleNo is string && data.vehicleNo.size() <= 64 &&
-        isOptionalString(data, 'consignorName', 256) &&
-        isOptionalString(data, 'consignorGst', 64) &&
-        isOptionalString(data, 'consignorAddress', 512) &&
-        isOptionalString(data, 'consigneeName', 256) &&
-        isOptionalString(data, 'consigneeGst', 64) &&
-        isOptionalString(data, 'consigneeAddress', 512) &&
-        isOptionalString(data, 'goodsDescription', 512) &&
-        isOptionalString(data, 'quantity', 128) &&
-        isOptionalString(data, 'sealNumber', 64) &&
-        isOptionalString(data, 'netWeight', 64) &&
-        isOptionalString(data, 'invoiceNo', 128) &&
-        isOptionalString(data, 'invoiceValue', 128) &&
-        isOptionalString(data, 'eWayBillNo', 128) &&
-        isOptionalString(data, 'inDate', 32) &&
-        isOptionalNumber(data, 'freight') &&
-        isOptionalNumber(data, 'otherCharges') &&
+        data.consignorName is string && data.consignorName.size() <= 256 &&
+        data.consignorGst is string && data.consignorGst.size() <= 64 &&
+        data.consignorAddress is string && data.consignorAddress.size() <= 512 &&
+        data.consigneeName is string && data.consigneeName.size() <= 256 &&
+        data.consigneeGst is string && data.consigneeGst.size() <= 64 &&
+        data.consigneeAddress is string && data.consigneeAddress.size() <= 512 &&
+        data.goodsDescription is string && data.goodsDescription.size() <= 512 &&
+        data.quantity is string && data.quantity.size() <= 128 &&
+        data.sealNumber is string && data.sealNumber.size() <= 64 &&
+        data.netWeight is string && data.netWeight.size() <= 64 &&
+        data.invoiceNo is string && data.invoiceNo.size() <= 128 &&
+        data.invoiceValue is string && data.invoiceValue.size() <= 128 &&
+        data.eWayBillNo is string && data.eWayBillNo.size() <= 128 &&
+        data.inDate is string && data.inDate.size() <= 32 &&
+        data.freight is number &&
+        data.otherCharges is number &&
+        data.total is number &&
+        data.gstType is string && data.gstType.size() <= 32 &&
+        data.gstRate is number &&
+        data.sgstAmount is number &&
+        data.cgstAmount is number &&
+        data.igstAmount is number &&
+        data.grandTotal is number &&
+        data.advance is number &&
+        data.balance is number &&
+        data.paymentMode is string && data.paymentMode.size() <= 64 &&
+        data.remarks is string && data.remarks.size() <= 512 &&
+        data.partyName is string && data.partyName.size() <= 256 &&
+        data.isShared is bool &&
+        data.sharedAt is number &&
+        data.createdAt is number &&
+        data.updatedAt is number &&
         isOptionalString(data, 'otherChargesLabel', 128) &&
-        isOptionalNumber(data, 'total') &&
-        isOptionalString(data, 'gstType', 32) &&
-        isOptionalNumber(data, 'gstRate') &&
-        isOptionalNumber(data, 'sgstAmount') &&
-        isOptionalNumber(data, 'cgstAmount') &&
-        isOptionalNumber(data, 'igstAmount') &&
-        isOptionalNumber(data, 'grandTotal') &&
-        isOptionalNumber(data, 'advance') &&
-        isOptionalNumber(data, 'balance') &&
-        isOptionalString(data, 'paymentMode', 64) &&
         isOptionalString(data, 'driverName', 128) &&
         isOptionalString(data, 'driverPhone', 64) &&
         isOptionalString(data, 'packages', 128) &&
-        isOptionalString(data, 'packingType', 128) &&
-        isOptionalString(data, 'remarks', 512) &&
-        isOptionalString(data, 'partyName', 256) &&
-        isOptionalBool(data, 'isShared') &&
-        isOptionalNumber(data, 'sharedAt') &&
-        isOptionalNumber(data, 'createdAt') &&
-        isOptionalNumber(data, 'updatedAt');
+        isOptionalString(data, 'packingType', 128);
     }
 
     function isValidCompanyProfile(data) {
