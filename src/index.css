@@ -81,6 +81,8 @@
     color: #0f172a;
     font-family: 'Calibri', sans-serif;
     font-weight: 900;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

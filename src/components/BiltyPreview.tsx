@@ -249,6 +249,10 @@ export const BiltyPreview: React.FC<BiltyPreviewProps> = ({
         backgroundColor: '#ffffff',
         color: BLACK,
         fontFamily: "Calibri, 'Segoe UI', Arial, sans-serif",
+        fontWeight: 400,
+        WebkitTextStroke: '0px',
+        WebkitTextSizeAdjust: 'none',
+        textSizeAdjust: 'none',
       }}
     >
       {/* Exact 26-Row x 6-Column Table matching "1 - LR - R.xlsx" */}
