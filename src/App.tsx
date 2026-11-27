@@ -183,80 +183,12 @@ export default function App() {
     );
   }, [companyRecords, searchQuery]);
 
-  // Real-time Firestore two-way sync when logged in
+  // Real-time Firestore authoritative sync when logged in (add, edit, and delete)
   useEffect(() => {
     if (!isLoggedIn) return;
-    const pushedIds = new Set<string>();
     const unsubscribe = subscribeToCloudBilties(
       (cloudRecords) => {
-        setRecords((prev) => {
-          const cloudMap = new Map<string, BiltyRecord>();
-          for (const c of cloudRecords) {
-            cloudMap.set(c.id, c);
-          }
-
-          const mergedMap = new Map<string, BiltyRecord>();
-          const toUpload: BiltyRecord[] = [];
-          const now = Date.now();
-
-          // 1. Merge cloud records with local records
-          for (const cloudRec of cloudRecords) {
-            const localRec = prev.find((p) => p.id === cloudRec.id);
-            if (!localRec) {
-              mergedMap.set(cloudRec.id, cloudRec);
-              continue;
-            }
-
-            const localUpdated = Number(localRec.updatedAt) || 0;
-            const cloudUpdated = Number(cloudRec.updatedAt) || 0;
-
-            if (localUpdated > cloudUpdated) {
-              mergedMap.set(localRec.id, localRec);
-              if (!pushedIds.has(`${localRec.id}_${localUpdated}`)) {
-                pushedIds.add(`${localRec.id}_${localUpdated}`);
-                toUpload.push(localRec);
-              }
-            } else if (localRec.partyName && !cloudRec.partyName) {
-              const patched: BiltyRecord = {
-                ...cloudRec,
-                partyName: localRec.partyName,
-                isShared: true,
-                sharedAt: localRec.sharedAt || cloudRec.sharedAt || Date.now(),
-                updatedAt: Math.max(localUpdated, cloudUpdated, Date.now()),
-              };
-              mergedMap.set(patched.id, patched);
-              if (!pushedIds.has(`${patched.id}_${patched.updatedAt}`)) {
-                pushedIds.add(`${patched.id}_${patched.updatedAt}`);
-                toUpload.push(patched);
-              }
-            } else {
-              mergedMap.set(cloudRec.id, cloudRec);
-            }
-          }
-
-          // 2. Keep local records ONLY if they were created very recently (< 15 seconds ago) and not yet in cloud
-          for (const localRec of prev) {
-            if (!cloudMap.has(localRec.id)) {
-              const age = now - (localRec.createdAt || 0);
-              if (age < 15000) {
-                mergedMap.set(localRec.id, localRec);
-                const stamp = Number(localRec.updatedAt) || 0;
-                if (!pushedIds.has(`${localRec.id}_${stamp}`)) {
-                  pushedIds.add(`${localRec.id}_${stamp}`);
-                  toUpload.push(localRec);
-                }
-              }
-            }
-          }
-
-          if (toUpload.length > 0) {
-            Promise.allSettled(toUpload.map((rec) => saveBiltyToCloud(rec))).catch(() => {});
-          }
-
-          const combined = Array.from(mergedMap.values());
-          combined.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          return combined;
-        });
+        setRecords(cloudRecords);
       },
       (err) => {
         console.warn('Cloud bilties sync warning:', err);

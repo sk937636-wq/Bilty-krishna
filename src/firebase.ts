@@ -202,27 +202,6 @@ export function getBiltyCollection(companyId?: string): string {
   return companyId === 'KTC' ? 'ktc' : 'krl';
 }
 
-// Save or Update Bilty to Cloud Firestore in separate 'krl' or 'ktc' collection
-export async function saveBiltyToCloud(bilty: BiltyRecord): Promise<void> {
-  const safePayload = sanitizeBilty(bilty);
-  const docId = String(safePayload.id);
-  const colName = getBiltyCollection(bilty.companyId);
-  const path = `${colName}/${docId}`;
-  try {
-    await setDoc(doc(db, colName, docId), safePayload);
-    // Cleanup from the opposite collection or legacy 'bilties' if moving or re-saving
-    const oppositeCol = colName === 'ktc' ? 'krl' : 'ktc';
-    try {
-      await deleteDoc(doc(db, oppositeCol, docId));
-    } catch (_) {}
-    try {
-      await deleteDoc(doc(db, 'bilties', docId));
-    } catch (_) {}
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
-}
-
 const DELETED_IDS_STORAGE_KEY = 'krl_deleted_bilty_ids_v1';
 
 export function getLocallyDeletedBiltyIds(): Set<string> {
@@ -247,18 +226,59 @@ export function markBiltyIdDeletedLocally(biltyId: string): void {
   } catch (_) {}
 }
 
+export function unmarkBiltyIdDeletedLocally(biltyId: string): void {
+  try {
+    const safeId = biltyId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const set = getLocallyDeletedBiltyIds();
+    if (set.has(biltyId) || set.has(safeId)) {
+      set.delete(biltyId);
+      set.delete(safeId);
+      localStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(Array.from(set)));
+    }
+  } catch (_) {}
+}
+
+// Save or Update Bilty to Cloud Firestore in separate 'krl' or 'ktc' collection
+export async function saveBiltyToCloud(bilty: BiltyRecord): Promise<void> {
+  const safePayload = sanitizeBilty(bilty);
+  const docId = String(safePayload.id);
+  unmarkBiltyIdDeletedLocally(docId);
+  const colName = getBiltyCollection(bilty.companyId);
+  const path = `${colName}/${docId}`;
+  try {
+    await setDoc(doc(db, colName, docId), safePayload);
+    // Cleanup from the opposite collection or legacy 'bilties' if moving or re-saving
+    const oppositeCol = colName === 'ktc' ? 'krl' : 'ktc';
+    try {
+      await deleteDoc(doc(db, oppositeCol, docId));
+    } catch (_) {}
+    try {
+      await deleteDoc(doc(db, 'bilties', docId));
+    } catch (_) {}
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
 // Delete Bilty from Cloud Firestore
 export async function deleteBiltyFromCloud(biltyId: string, companyId?: string): Promise<void> {
   markBiltyIdDeletedLocally(biltyId);
   const safeId = biltyId.replace(/[^a-zA-Z0-9_\-]/g, '_');
   const colName = getBiltyCollection(companyId);
+  const oppositeCol = colName === 'ktc' ? 'krl' : 'ktc';
   const path = `${colName}/${safeId}`;
+  const candidateIds = Array.from(new Set([safeId, biltyId].filter(Boolean)));
+
   try {
-    await deleteDoc(doc(db, colName, safeId));
-    // Also cleanup from opposite collection and legacy 'bilties' just in case
-    const oppositeCol = colName === 'ktc' ? 'krl' : 'ktc';
-    try { await deleteDoc(doc(db, oppositeCol, safeId)); } catch (_) {}
-    try { await deleteDoc(doc(db, 'bilties', safeId)); } catch (_) {}
+    await Promise.all(
+      candidateIds.map((id) => deleteDoc(doc(db, colName, id)))
+    );
+    await Promise.allSettled(
+      candidateIds.flatMap((id) => [
+        deleteDoc(doc(db, oppositeCol, id)),
+        deleteDoc(doc(db, 'bilties', id)),
+      ])
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
@@ -347,9 +367,16 @@ export function subscribeToCloudBilties(
     unsubKrl = onSnapshot(
       collection(db, 'krl'),
       (snapshot) => {
+        const deletedSet = getLocallyDeletedBiltyIds();
         krlRecords = [];
         snapshot.forEach((d) => {
-          krlRecords.push({ ...d.data(), companyId: 'KRL' } as BiltyRecord);
+          const data = d.data() as BiltyRecord;
+          if (deletedSet.has(d.id) || (data.id && deletedSet.has(data.id))) {
+            // If this device already deleted this record, purge any re-uploaded copy from Firestore
+            deleteDoc(doc(db, 'krl', d.id)).catch(() => {});
+            return;
+          }
+          krlRecords.push({ ...data, id: d.id, companyId: 'KRL' });
         });
         krlLoaded = true;
         emitAll();
@@ -365,9 +392,16 @@ export function subscribeToCloudBilties(
     unsubKtc = onSnapshot(
       collection(db, 'ktc'),
       (snapshot) => {
+        const deletedSet = getLocallyDeletedBiltyIds();
         ktcRecords = [];
         snapshot.forEach((d) => {
-          ktcRecords.push({ ...d.data(), companyId: 'KTC' } as BiltyRecord);
+          const data = d.data() as BiltyRecord;
+          if (deletedSet.has(d.id) || (data.id && deletedSet.has(data.id))) {
+            // If this device already deleted this record, purge any re-uploaded copy from Firestore
+            deleteDoc(doc(db, 'ktc', d.id)).catch(() => {});
+            return;
+          }
+          ktcRecords.push({ ...data, id: d.id, companyId: 'KTC' });
         });
         ktcLoaded = true;
         emitAll();
@@ -383,9 +417,14 @@ export function subscribeToCloudBilties(
     unsubLegacy = onSnapshot(
       collection(db, 'bilties'),
       (snapshot) => {
+        const deletedSet = getLocallyDeletedBiltyIds();
         legacyRecords = [];
         snapshot.forEach(async (d) => {
           const data = d.data() as BiltyRecord;
+          if (deletedSet.has(d.id) || (data.id && deletedSet.has(data.id))) {
+            deleteDoc(doc(db, 'bilties', d.id)).catch(() => {});
+            return;
+          }
           const companyId = data.companyId === 'KTC' ? 'KTC' : 'KRL';
           const targetCol = companyId === 'KTC' ? 'ktc' : 'krl';
           try {
@@ -393,7 +432,7 @@ export function subscribeToCloudBilties(
             await setDoc(doc(db, targetCol, String(safePayload.id)), safePayload);
             await deleteDoc(doc(db, 'bilties', d.id));
           } catch (_) {
-            legacyRecords.push(data);
+            legacyRecords.push({ ...data, id: d.id, companyId });
           }
         });
         emitAll();
