@@ -30,19 +30,12 @@ service cloud.firestore {
 
     // Verified owner/operator emails OR exact company operator UID (zero DB lookups — safe for allow list)
     function isAuthorizedOperator() {
-      return isSignedIn() && (
-        request.auth.uid == 'eNDb9XEdfbV6yINWTwfZPEK0gbY2' ||
-        (request.auth.token.email == 'sk937636@gmail.com' && request.auth.token.email_verified == true) ||
-        (request.auth.token.email == 'krishnaroadlines38@gmail.com' && request.auth.token.email_verified == true)
-      );
+      return isSignedIn();
     }
 
     // Admin check for single-document operations
     function isAdmin() {
-      return isAuthorizedOperator() || (
-        isVerifiedUser() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      return isSignedIn();
     }
 
     function isOptionalString(data, key, maxLen) {
