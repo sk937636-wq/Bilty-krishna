@@ -197,6 +197,7 @@ export default function App() {
 
           const mergedMap = new Map<string, BiltyRecord>();
           const toUpload: BiltyRecord[] = [];
+          const now = Date.now();
 
           // 1. Merge cloud records with local records
           for (const cloudRec of cloudRecords) {
@@ -233,14 +234,17 @@ export default function App() {
             }
           }
 
-          // 2. Keep any local Bilties that haven't been uploaded to cloud yet and push them
+          // 2. Keep local records ONLY if they were created very recently (< 15 seconds ago) and not yet in cloud
           for (const localRec of prev) {
             if (!cloudMap.has(localRec.id)) {
-              mergedMap.set(localRec.id, localRec);
-              const stamp = Number(localRec.updatedAt) || 0;
-              if (!pushedIds.has(`${localRec.id}_${stamp}`)) {
-                pushedIds.add(`${localRec.id}_${stamp}`);
-                toUpload.push(localRec);
+              const age = now - (localRec.createdAt || 0);
+              if (age < 15000) {
+                mergedMap.set(localRec.id, localRec);
+                const stamp = Number(localRec.updatedAt) || 0;
+                if (!pushedIds.has(`${localRec.id}_${stamp}`)) {
+                  pushedIds.add(`${localRec.id}_${stamp}`);
+                  toUpload.push(localRec);
+                }
               }
             }
           }
