@@ -255,9 +255,15 @@ export async function generateBiltyPdfFile(
   try {
     const pdf = await buildBiltyPdf(elementId, { orientation: 'landscape' });
     if (!pdf) return null;
-    const blob = pdf.output('blob');
-    const cleanFileName = `${fileName.replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'Bilty'}.pdf`;
-    return new File([blob], cleanFileName, { type: 'application/pdf' });
+    const rawBlob = pdf.output('blob');
+    const pdfBlob = new Blob([rawBlob], { type: 'application/pdf' });
+    const stripped = fileName.replace(/\.pdf$/i, '');
+    const cleanBase = stripped.replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'Bilty';
+    const cleanFileName = `${cleanBase}.pdf`;
+    return new File([pdfBlob], cleanFileName, {
+      type: 'application/pdf',
+      lastModified: Date.now(),
+    });
   } catch (error) {
     console.error('Error generating PDF file for sharing:', error);
     return null;

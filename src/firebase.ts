@@ -223,8 +223,33 @@ export async function saveBiltyToCloud(bilty: BiltyRecord): Promise<void> {
   }
 }
 
+const DELETED_IDS_STORAGE_KEY = 'krl_deleted_bilty_ids_v1';
+
+export function getLocallyDeletedBiltyIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_IDS_STORAGE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set<string>(arr);
+    }
+  } catch (_) {}
+  return new Set<string>();
+}
+
+export function markBiltyIdDeletedLocally(biltyId: string): void {
+  try {
+    const safeId = biltyId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const set = getLocallyDeletedBiltyIds();
+    set.add(biltyId);
+    set.add(safeId);
+    const list = Array.from(set).slice(-500);
+    localStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(list));
+  } catch (_) {}
+}
+
 // Delete Bilty from Cloud Firestore
 export async function deleteBiltyFromCloud(biltyId: string, companyId?: string): Promise<void> {
+  markBiltyIdDeletedLocally(biltyId);
   const safeId = biltyId.replace(/[^a-zA-Z0-9_\-]/g, '_');
   const colName = getBiltyCollection(companyId);
   const path = `${colName}/${safeId}`;
@@ -274,6 +299,8 @@ export function subscribeToCloudBilties(
   let krlRecords: BiltyRecord[] = [];
   let ktcRecords: BiltyRecord[] = [];
   let legacyRecords: BiltyRecord[] = [];
+  let krlLoaded = false;
+  let ktcLoaded = false;
   let unsubKrl: (() => void) | null = null;
   let unsubKtc: (() => void) | null = null;
   let unsubLegacy: (() => void) | null = null;
@@ -291,14 +318,22 @@ export function subscribeToCloudBilties(
       unsubLegacy();
       unsubLegacy = null;
     }
+    krlLoaded = false;
+    ktcLoaded = false;
   };
 
   const emitAll = () => {
+    if (!krlLoaded || !ktcLoaded) return;
+    const deletedSet = getLocallyDeletedBiltyIds();
     const map = new Map<string, BiltyRecord>();
-    for (const r of krlRecords) map.set(r.id, r);
-    for (const r of ktcRecords) map.set(r.id, r);
+    for (const r of krlRecords) {
+      if (!deletedSet.has(r.id)) map.set(r.id, r);
+    }
+    for (const r of ktcRecords) {
+      if (!deletedSet.has(r.id)) map.set(r.id, r);
+    }
     for (const r of legacyRecords) {
-      if (!map.has(r.id)) map.set(r.id, r);
+      if (!deletedSet.has(r.id) && !map.has(r.id)) map.set(r.id, r);
     }
     const combined = Array.from(map.values());
     combined.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -316,9 +351,11 @@ export function subscribeToCloudBilties(
         snapshot.forEach((d) => {
           krlRecords.push({ ...d.data(), companyId: 'KRL' } as BiltyRecord);
         });
+        krlLoaded = true;
         emitAll();
       },
       (error) => {
+        krlLoaded = true;
         handleFirestoreError(error, OperationType.LIST, 'krl');
         if (onError) onError(error);
       }
@@ -332,9 +369,11 @@ export function subscribeToCloudBilties(
         snapshot.forEach((d) => {
           ktcRecords.push({ ...d.data(), companyId: 'KTC' } as BiltyRecord);
         });
+        ktcLoaded = true;
         emitAll();
       },
       (error) => {
+        ktcLoaded = true;
         handleFirestoreError(error, OperationType.LIST, 'ktc');
         if (onError) onError(error);
       }

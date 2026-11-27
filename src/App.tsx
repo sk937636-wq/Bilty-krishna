@@ -183,46 +183,76 @@ export default function App() {
     );
   }, [companyRecords, searchQuery]);
 
-  // Real-time Firestore sync when logged in
+  // Real-time Firestore two-way sync when logged in
   useEffect(() => {
     if (!isLoggedIn) return;
+    const pushedIds = new Set<string>();
     const unsubscribe = subscribeToCloudBilties(
       (cloudRecords) => {
-        if (cloudRecords && cloudRecords.length > 0) {
-          setRecords((prev) => {
-            const prevMap = new Map<string, BiltyRecord>();
-            for (const item of prev) {
-              prevMap.set(item.id, item);
+        setRecords((prev) => {
+          const cloudMap = new Map<string, BiltyRecord>();
+          for (const c of cloudRecords) {
+            cloudMap.set(c.id, c);
+          }
+
+          const mergedMap = new Map<string, BiltyRecord>();
+          const toUpload: BiltyRecord[] = [];
+
+          // 1. Merge cloud records with local records
+          for (const cloudRec of cloudRecords) {
+            const localRec = prev.find((p) => p.id === cloudRec.id);
+            if (!localRec) {
+              mergedMap.set(cloudRec.id, cloudRec);
+              continue;
             }
 
-            const merged = cloudRecords.map((cloudRec) => {
-              const localRec = prevMap.get(cloudRec.id);
-              if (!localRec) return cloudRec;
+            const localUpdated = Number(localRec.updatedAt) || 0;
+            const cloudUpdated = Number(cloudRec.updatedAt) || 0;
 
-              const localUpdated = Number(localRec.updatedAt) || 0;
-              const cloudUpdated = Number(cloudRec.updatedAt) || 0;
-
-              // Keep local version if it is newer than cloud snapshot
-              if (localUpdated > cloudUpdated) {
-                return localRec;
+            if (localUpdated > cloudUpdated) {
+              mergedMap.set(localRec.id, localRec);
+              if (!pushedIds.has(`${localRec.id}_${localUpdated}`)) {
+                pushedIds.add(`${localRec.id}_${localUpdated}`);
+                toUpload.push(localRec);
               }
-
-              // Also preserve local partyName if local had it shared and cloud hasn't caught up yet
-              if (localRec.partyName && !cloudRec.partyName) {
-                return {
-                  ...cloudRec,
-                  partyName: localRec.partyName,
-                  isShared: true,
-                  sharedAt: localRec.sharedAt || cloudRec.sharedAt,
-                };
+            } else if (localRec.partyName && !cloudRec.partyName) {
+              const patched: BiltyRecord = {
+                ...cloudRec,
+                partyName: localRec.partyName,
+                isShared: true,
+                sharedAt: localRec.sharedAt || cloudRec.sharedAt || Date.now(),
+                updatedAt: Math.max(localUpdated, cloudUpdated, Date.now()),
+              };
+              mergedMap.set(patched.id, patched);
+              if (!pushedIds.has(`${patched.id}_${patched.updatedAt}`)) {
+                pushedIds.add(`${patched.id}_${patched.updatedAt}`);
+                toUpload.push(patched);
               }
+            } else {
+              mergedMap.set(cloudRec.id, cloudRec);
+            }
+          }
 
-              return cloudRec;
-            });
+          // 2. Keep any local Bilties that haven't been uploaded to cloud yet and push them
+          for (const localRec of prev) {
+            if (!cloudMap.has(localRec.id)) {
+              mergedMap.set(localRec.id, localRec);
+              const stamp = Number(localRec.updatedAt) || 0;
+              if (!pushedIds.has(`${localRec.id}_${stamp}`)) {
+                pushedIds.add(`${localRec.id}_${stamp}`);
+                toUpload.push(localRec);
+              }
+            }
+          }
 
-            return merged;
-          });
-        }
+          if (toUpload.length > 0) {
+            Promise.allSettled(toUpload.map((rec) => saveBiltyToCloud(rec))).catch(() => {});
+          }
+
+          const combined = Array.from(mergedMap.values());
+          combined.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          return combined;
+        });
       },
       (err) => {
         console.warn('Cloud bilties sync warning:', err);
@@ -332,7 +362,7 @@ export default function App() {
     }
   };
 
-  // Generate PDF with "LR NO - DD - PARTY NAME" filename and share on WhatsApp
+  // Generate PDF with "LR NO - DD - PARTY NAME.pdf" filename and share on WhatsApp
   const handleShareBiltyPdf = async (
     record: BiltyRecord,
     partyName: string,
@@ -342,26 +372,38 @@ export default function App() {
     setSharingId(record.id);
     setActiveBiltyForPdf(record);
 
+    const cleanParty = partyName.trim().toUpperCase();
+    const cleanBaseName = pdfFileName.replace(/\.pdf$/i, '').trim();
+    const explicitFileName = `${cleanBaseName}.pdf`;
+
     // Save shared party name immediately so it appears below the LR number on the card
-    markRecordAsShared(record, partyName);
+    markRecordAsShared(record, cleanParty);
 
     // Wait for React to render the selected Bilty in the offscreen BiltyPreview
     await new Promise((r) => setTimeout(r, 120));
 
-    const pdfFile = await generateBiltyPdfFile('bilty-export-clean-document', pdfFileName);
+    const generatedFile = await generateBiltyPdfFile('bilty-export-clean-document', explicitFileName);
 
     setSharingId(null);
     setShareModalRecord(null);
 
-    if (!pdfFile) {
+    if (!generatedFile) {
       return;
     }
 
-    // 1. Download the PDF file FIRST on the device
-    const downloadUrl = URL.createObjectURL(pdfFile);
+    // Explicitly wrap in File constructor with exact clean filename to prevent randomized blob names
+    const pdfBlob = new Blob([generatedFile], { type: 'application/pdf' });
+    const pdfFile = new File([pdfBlob], explicitFileName, {
+      type: 'application/pdf',
+      lastModified: Date.now(),
+    });
+
+    // 1. Download the PDF file FIRST on the device with explicit filename
+    const downloadUrl = URL.createObjectURL(pdfBlob);
     const downloadLink = document.createElement('a');
     downloadLink.href = downloadUrl;
-    downloadLink.download = pdfFile.name;
+    downloadLink.setAttribute('download', explicitFileName);
+    downloadLink.download = explicitFileName;
     document.body.appendChild(downloadLink);
     downloadLink.click();
     document.body.removeChild(downloadLink);
@@ -377,8 +419,6 @@ export default function App() {
       try {
         await navigator.share({
           files: [pdfFile],
-          title: pdfFile.name,
-          text: `LR #${record.lrNo} - ${partyName} (${record.vehicleNo})`,
         });
         return;
       } catch (err: any) {
@@ -386,7 +426,7 @@ export default function App() {
           return;
         }
         // If browser blocked async share after download due to gesture timeout, show 1-tap instant share modal
-        setReadyPdfShare({ record, partyName, file: pdfFile });
+        setReadyPdfShare({ record, partyName: cleanParty, file: pdfFile });
         return;
       }
     }
@@ -397,7 +437,7 @@ export default function App() {
         ? 'KRISHNA TRANSPORT COMPANY'
         : 'KRISHNA ROADLINES';
     const waText = encodeURIComponent(
-      `*${activeCompName}*\n*LR NO:* ${record.lrNo}\n*PARTY:* ${partyName}\n*VEHICLE NO:* ${record.vehicleNo} (${record.vehicleSize})\n*IN-DATE:* ${formatDateDdMmYyyy(record.inDate)}`
+      `*${activeCompName}*\n*LR NO:* ${record.lrNo}\n*PARTY:* ${cleanParty}\n*VEHICLE NO:* ${record.vehicleNo} (${record.vehicleSize})\n*IN-DATE:* ${formatDateDdMmYyyy(record.inDate)}`
     );
     window.location.href = `https://api.whatsapp.com/send?text=${waText}`;
   };
@@ -410,8 +450,6 @@ export default function App() {
       if (navigator.share) {
         await navigator.share({
           files: [file],
-          title: file.name,
-          text: `LR #${record.lrNo} - ${partyName} (${record.vehicleNo})`,
         });
         markRecordAsShared(record.id, partyName);
       }
@@ -420,10 +458,12 @@ export default function App() {
         const url = URL.createObjectURL(file);
         const link = document.createElement('a');
         link.href = url;
+        link.setAttribute('download', file.name);
         link.download = file.name;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
         markRecordAsShared(record.id, partyName);
       }
     } finally {
